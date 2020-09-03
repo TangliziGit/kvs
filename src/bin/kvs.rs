@@ -1,11 +1,14 @@
+#[macro_use]
+extern crate clap;
+
 use clap::{App, Arg, SubCommand};
 use std::process;
 
 fn main() {
-    let matches = App::new("Key Value Store")
-        .version("0.0.1")
-        .author("TangliziGit <tanglizimail@foxmail.com>")
-        .about("A key-value store")
+    let matches = App::new("Key Value Store - kvs")
+        .version(crate_version!())
+        .author(crate_authors!("\n"))
+        .about(crate_description!())
         .arg(Arg::with_name("version")
              .short("V")
              .long("version")
@@ -31,7 +34,7 @@ fn main() {
         .get_matches();
 
     if matches.is_present("version") {
-        println!("0.0.1");
+        println!(crate_version!());
     }
 
     match matches.subcommand() {
