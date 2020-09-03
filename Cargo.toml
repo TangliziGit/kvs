@@ -1,0 +1,8 @@
+[package]
+name = "kvs"
+version = "0.1.0"
+authors = ["TangliziGit <tanglizimail@foxmail.com>"]
+description = "A key-value store"
+edition = "2018"
+
+[dependencies]
