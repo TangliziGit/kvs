@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 pub struct KvStore;
 
 impl KvStore {
