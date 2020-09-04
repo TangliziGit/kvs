@@ -21,13 +21,20 @@ pub struct KvStore {
     map: HashMap<String, String>,
 }
 
-impl KvStore {
+impl Default for KvStore {
+    fn default() -> Self {
+        KvStore {
+            map: HashMap::default(),
+        }
+    }
+}
 
+impl KvStore {
     #[inline]
     pub fn new() -> KvStore {
-        let map = HashMap::new();
-
-        KvStore { map }
+        KvStore {
+            map: HashMap::new(),
+        }
     }
 
     /// Set the value of a string key to a string
@@ -55,8 +62,7 @@ impl KvStore {
     /// assert_eq!(value, None);
     /// ```
     pub fn get(&self, key: String) -> Option<String> {
-        self.map.get(&key)
-            .map(Clone::clone)
+        self.map.get(&key).map(Clone::clone)
     }
 
     /// Remove a given key.
@@ -76,4 +82,3 @@ impl KvStore {
         self.map.remove(&key);
     }
 }
-
