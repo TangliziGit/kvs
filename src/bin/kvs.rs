@@ -50,6 +50,6 @@ fn main() {
             eprintln!("unimplemented");
             process::exit(1);
         },
-        _ => {},
+        _ => process::exit(1),
     }
 }
