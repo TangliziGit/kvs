@@ -1,14 +1,17 @@
 #[macro_use]
 extern crate clap;
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 use std::process;
 
 fn main() {
-    let matches = App::new("Key Value Store - kvs")
+    let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(crate_version!())
         .author(crate_authors!("\n"))
         .about(crate_description!())
+        .setting(AppSettings::DisableHelpSubcommand)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name("version")
                 .short("V")
@@ -37,23 +40,19 @@ fn main() {
         )
         .get_matches();
 
-    if matches.is_present("version") {
-        println!(crate_version!());
-    }
-
     match matches.subcommand() {
-        ("set", Some(matches)) => {
+        ("set", Some(_matches)) => {
             eprintln!("unimplemented");
             process::exit(1);
         }
-        ("get", Some(matches)) => {
+        ("get", Some(_matches)) => {
             eprintln!("unimplemented");
             process::exit(1);
         }
-        ("rm", Some(matches)) => {
+        ("rm", Some(_matches)) => {
             eprintln!("unimplemented");
             process::exit(1);
         }
-        _ => process::exit(1),
+        _ => unreachable!(),
     }
 }
