@@ -12,11 +12,11 @@ pub enum ErrorKind {
     #[fail(display = "{}", _0)]
     Io(#[cause] io::Error),
 
+    #[fail(display = "{}", _0)]
+    Serde(#[cause] serde_json::Error),
+
     #[fail(display = "Key not found")]
     KeyNotFound,
-
-    #[fail(display = "Value not found")]
-    ValueNotFound,
 }
 
 impl Fail for Error {
@@ -53,6 +53,14 @@ impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Error {
             inner: Context::new(ErrorKind::Io(err)),
+        }
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error {
+            inner: Context::new(ErrorKind::Serde(err)),
         }
     }
 }

@@ -2,9 +2,12 @@
 extern crate clap;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+use kvs::KvStore;
+use kvs::Result;
+use std::env::current_dir;
 use std::process;
 
-fn main() {
+fn main() -> Result<()> {
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(crate_version!())
         .author(crate_authors!("\n"))
@@ -41,9 +44,12 @@ fn main() {
         .get_matches();
 
     match matches.subcommand() {
-        ("set", Some(_matches)) => {
-            eprintln!("unimplemented");
-            process::exit(1);
+        ("set", Some(matches)) => {
+            let key = matches.value_of("KEY").expect("KEY argument missing");
+            let value = matches.value_of("VALUE").expect("VALUE argument missing");
+
+            let mut store = KvStore::open(current_dir()?)?;
+            store.set(key.to_string(), value.to_string())?;
         }
         ("get", Some(_matches)) => {
             eprintln!("unimplemented");
@@ -55,4 +61,6 @@ fn main() {
         }
         _ => unreachable!(),
     }
+
+    Ok(())
 }

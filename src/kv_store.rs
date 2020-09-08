@@ -1,5 +1,9 @@
-use crate::error::{ErrorKind, Result};
+use crate::error::Result;
+use serde::{Deserialize, Serialize};
+use serde_json::Deserializer;
 use std::collections::HashMap;
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 /// Used to store a string key to a string value.
@@ -19,24 +23,29 @@ use std::path::PathBuf;
 /// let val = kvs.get("key".to_string());
 /// assert_eq!(val, None);
 /// ```
-#[derive(Default)]
 pub struct KvStore {
-    map: HashMap<String, String>,
+    writer: BufWriter<File>,
+    reader: BufReader<File>,
+    index: HashMap<String, CommandOffset>,
 }
 
 impl KvStore {
-    /// Creates a `KvStore`
-    #[inline]
-    pub fn new() -> KvStore {
-        KvStore {
-            map: HashMap::new(),
-        }
-    }
-
     /// Open the KvStore at a given path.
     /// Return the KvStore.
-    pub fn open(_path: impl Into<PathBuf>) -> Result<KvStore> {
-        unimplemented!()
+    pub fn open(path: impl Into<PathBuf>) -> Result<KvStore> {
+        let path = path.into();
+        fs::create_dir_all(&path)?;
+
+        let path = db_path(&path)?;
+        let writer = BufWriter::new(File::open(&path)?);
+        let mut reader = BufReader::new(File::open(&path)?);
+        let index = load_index(&mut reader)?;
+
+        Ok(KvStore {
+            writer,
+            reader,
+            index,
+        })
     }
 
     /// Sets the value of a string key to a string.
@@ -50,10 +59,11 @@ impl KvStore {
     /// kvs.set("key".to_string(), "value".to_string());
     /// ```
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        if self.map.insert(key, value).is_none() {
-            return Err(ErrorKind::KeyNotFound.into());
-        }
+        let command = Command::Set { key, value };
+        let content = serde_json::to_string(&command)?;
 
+        self.writer.seek(SeekFrom::End(0))?;
+        self.writer.write_all(content.as_bytes())?;
         Ok(())
     }
 
@@ -70,8 +80,8 @@ impl KvStore {
     ///
     /// assert_eq!(value, None);
     /// ```
-    pub fn get(&self, key: String) -> Result<Option<String>> {
-        Ok(self.map.get(&key).map(Clone::clone))
+    pub fn get(&self, _key: String) -> Result<Option<String>> {
+        unimplemented!()
     }
 
     /// Removes a given key.
@@ -88,8 +98,61 @@ impl KvStore {
     /// let value = kvs.get("key".to_string());
     /// assert_eq!(value, None);
     /// ```
-    pub fn remove(&mut self, key: String) -> Result<()> {
-        self.map.remove(&key);
-        Ok(())
+    pub fn remove(&mut self, _key: String) -> Result<()> {
+        unimplemented!()
+    }
+}
+
+fn db_path(path: &PathBuf) -> Result<PathBuf> {
+    let path = path.join("kvs.db");
+
+    if !path.exists() {
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)?;
+    }
+
+    Ok(path)
+}
+
+fn load_index(reader: &mut BufReader<File>) -> Result<HashMap<String, CommandOffset>> {
+    let mut pos = reader.seek(SeekFrom::Start(0))?;
+    let mut index = HashMap::new();
+    let mut stream = Deserializer::from_reader(reader).into_iter::<Command>();
+    while let Some(cmd) = stream.next() {
+        let new_pos = stream.byte_offset() as u64;
+
+        match cmd? {
+            Command::Set { key, value: _ } => {
+                index.insert(key, From::from((pos, new_pos - 1)));
+            }
+            Command::Remove { key } => {
+                index.remove(&key);
+            }
+        }
+
+        pos = new_pos;
+    }
+
+    Ok(index)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum Command {
+    Set { key: String, value: String },
+    Remove { key: String },
+}
+
+#[derive(Debug)]
+struct CommandOffset {
+    pos: u64,
+    len: u64,
+}
+
+impl From<(u64, u64)> for CommandOffset {
+    fn from((pos, len): (u64, u64)) -> Self {
+        CommandOffset { pos, len }
     }
 }
