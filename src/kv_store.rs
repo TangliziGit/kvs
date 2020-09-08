@@ -37,7 +37,7 @@ impl KvStore {
         fs::create_dir_all(&path)?;
 
         let path = db_path(&path)?;
-        let writer = BufWriter::new(File::open(&path)?);
+        let writer = BufWriter::new(OpenOptions::new().write(true).open(&path)?);
         let mut reader = BufReader::new(File::open(&path)?);
         let index = load_index(&mut reader)?;
 
@@ -64,6 +64,7 @@ impl KvStore {
 
         self.writer.seek(SeekFrom::End(0))?;
         self.writer.write_all(content.as_bytes())?;
+        self.writer.flush()?;
         Ok(())
     }
 
