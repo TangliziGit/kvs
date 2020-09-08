@@ -1,67 +1,31 @@
-use failure::{Backtrace, Context, Fail};
-use std::fmt::{self, Display};
+use failure::Fail;
 use std::io;
 
-#[derive(Debug)]
-pub struct Error {
-    inner: Context<ErrorKind>,
-}
-
+/// Error type for kvs.
 #[derive(Debug, Fail)]
-pub enum ErrorKind {
+pub enum Error {
+    /// IO error.
     #[fail(display = "{}", _0)]
     Io(#[cause] io::Error),
 
+    /// Serialization or deserialization error.
     #[fail(display = "{}", _0)]
     Serde(#[cause] serde_json::Error),
 
+    /// Error for key not found.
     #[fail(display = "Key not found")]
     KeyNotFound,
 }
 
-impl Fail for Error {
-    fn cause(&self) -> Option<&dyn Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl From<ErrorKind> for Error {
-    fn from(kind: ErrorKind) -> Error {
-        Error {
-            inner: Context::new(kind),
-        }
-    }
-}
-
-impl From<Context<ErrorKind>> for Error {
-    fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner }
-    }
-}
-
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
-        Error {
-            inner: Context::new(ErrorKind::Io(err)),
-        }
+        Error::Io(err)
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
-        Error {
-            inner: Context::new(ErrorKind::Serde(err)),
-        }
+        Error::Serde(err)
     }
 }
 

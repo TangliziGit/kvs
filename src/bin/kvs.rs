@@ -3,7 +3,7 @@ extern crate clap;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use kvs::KvStore;
-use kvs::Result;
+use kvs::{Error, Result};
 use std::env::current_dir;
 use std::process;
 
@@ -45,8 +45,10 @@ fn main() -> Result<()> {
 
     match matches.subcommand() {
         ("set", Some(matches)) => {
-            let key = matches.value_of("KEY").expect("KEY argument missing");
-            let value = matches.value_of("VALUE").expect("VALUE argument missing");
+            let key = matches.value_of("KEY").expect("KEY argument is missing");
+            let value = matches
+                .value_of("VALUE")
+                .expect("VALUE argument is missing");
 
             let mut store = KvStore::open(current_dir()?)?;
             store.set(key.to_string(), value.to_string())?;
@@ -55,9 +57,18 @@ fn main() -> Result<()> {
             eprintln!("unimplemented");
             process::exit(1);
         }
-        ("rm", Some(_matches)) => {
-            eprintln!("unimplemented");
-            process::exit(1);
+        ("rm", Some(matches)) => {
+            let key = matches.value_of("KEY").expect("KEY argument is missing");
+
+            let mut store = KvStore::open(current_dir()?)?;
+            match store.remove(key.to_string()) {
+                Ok(_) => {}
+                Err(Error::KeyNotFound) => {
+                    println!("Key not found");
+                    process::exit(1);
+                }
+                Err(e) => return Err(e),
+            }
         }
         _ => unreachable!(),
     }

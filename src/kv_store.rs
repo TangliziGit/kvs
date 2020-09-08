@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
 use std::collections::HashMap;
@@ -64,7 +64,6 @@ impl KvStore {
 
         self.writer.seek(SeekFrom::End(0))?;
         self.writer.write_all(content.as_bytes())?;
-        self.writer.flush()?;
         Ok(())
     }
 
@@ -99,8 +98,18 @@ impl KvStore {
     /// let value = kvs.get("key".to_string());
     /// assert_eq!(value, None);
     /// ```
-    pub fn remove(&mut self, _key: String) -> Result<()> {
-        unimplemented!()
+    pub fn remove(&mut self, key: String) -> Result<()> {
+        match self.index.get(&key) {
+            Some(_) => {
+                let command = Command::Remove { key };
+                let content = serde_json::to_string(&command)?;
+
+                self.writer.seek(SeekFrom::End(0))?;
+                self.writer.write_all(content.as_bytes())?;
+                Ok(())
+            }
+            None => Err(Error::KeyNotFound),
+        }
     }
 }
 
