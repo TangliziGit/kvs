@@ -1,9 +1,10 @@
 use crate::error::{Error, Result};
+use failure::_core::ops::Range;
 use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 /// Used to store a string key to a string value.
@@ -59,11 +60,17 @@ impl KvStore {
     /// kvs.set("key".to_string(), "value".to_string());
     /// ```
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        let command = Command::Set { key, value };
-        let content = serde_json::to_string(&command)?;
+        let command = Command::Set {
+            key: key.clone(),
+            value,
+        };
 
-        self.writer.seek(SeekFrom::End(0))?;
-        self.writer.write_all(content.as_bytes())?;
+        let pos = self.writer.seek(SeekFrom::End(0))?;
+        serde_json::to_writer(&mut self.writer, &command)?;
+
+        let new_pos = self.writer.seek(SeekFrom::Current(0))?;
+        self.index.insert(key, From::from(pos..new_pos));
+
         Ok(())
     }
 
@@ -80,8 +87,22 @@ impl KvStore {
     ///
     /// assert_eq!(value, None);
     /// ```
-    pub fn get(&self, _key: String) -> Result<Option<String>> {
-        unimplemented!()
+    pub fn get(&mut self, key: String) -> Result<Option<String>> {
+        if let Some(CommandOffset { pos, len }) = self.index.get(&key) {
+            self.reader.seek(SeekFrom::Start(*pos))?;
+
+            let mut buffer = vec![0u8; *len as usize];
+            self.reader.read_exact(&mut buffer)?;
+
+            let cmd: Command = serde_json::from_slice(&buffer)?;
+            if let Command::Set { key: _, value } = cmd {
+                Ok(Some(value))
+            } else {
+                unreachable!()
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// Removes a given key.
@@ -136,7 +157,7 @@ fn load_index(reader: &mut BufReader<File>) -> Result<HashMap<String, CommandOff
 
         match cmd? {
             Command::Set { key, value: _ } => {
-                index.insert(key, From::from((pos, new_pos - 1)));
+                index.insert(key, From::from(pos..new_pos));
             }
             Command::Remove { key } => {
                 index.remove(&key);
@@ -161,8 +182,11 @@ struct CommandOffset {
     len: u64,
 }
 
-impl From<(u64, u64)> for CommandOffset {
-    fn from((pos, len): (u64, u64)) -> Self {
-        CommandOffset { pos, len }
+impl From<Range<u64>> for CommandOffset {
+    fn from(range: Range<u64>) -> Self {
+        CommandOffset {
+            pos: range.start,
+            len: range.end - range.start,
+        }
     }
 }

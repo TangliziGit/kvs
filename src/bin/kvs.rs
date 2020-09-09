@@ -13,7 +13,7 @@ fn main() -> Result<()> {
         .author(crate_authors!("\n"))
         .about(crate_description!())
         .setting(AppSettings::DisableHelpSubcommand)
-        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name("version")
@@ -43,6 +43,11 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
+    if matches.is_present("version") {
+        println!(crate_version!());
+        process::exit(0);
+    }
+
     match matches.subcommand() {
         ("set", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
@@ -53,9 +58,17 @@ fn main() -> Result<()> {
             let mut store = KvStore::open(current_dir()?)?;
             store.set(key.to_string(), value.to_string())?;
         }
-        ("get", Some(_matches)) => {
-            eprintln!("unimplemented");
-            process::exit(1);
+        ("get", Some(matches)) => {
+            let key = matches.value_of("KEY").expect("KEY argument is missing");
+
+            let mut store = KvStore::open(current_dir()?)?;
+            let value = store.get(key.to_string())?;
+
+            if let Some(value) = value {
+                println!("{}", value);
+            } else {
+                println!("Key not found");
+            }
         }
         ("rm", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
