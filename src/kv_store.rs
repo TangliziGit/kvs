@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 /// Used to store a string key to a string value.
@@ -122,11 +122,13 @@ impl KvStore {
     pub fn remove(&mut self, key: String) -> Result<()> {
         match self.index.get(&key) {
             Some(_) => {
-                let command = Command::Remove { key };
-                let content = serde_json::to_string(&command)?;
+                let command = Command::Remove { key: key.clone() };
 
                 self.writer.seek(SeekFrom::End(0))?;
-                self.writer.write_all(content.as_bytes())?;
+                serde_json::to_writer(&mut self.writer, &command)?;
+
+                self.index.remove(&key);
+
                 Ok(())
             }
             None => Err(Error::KeyNotFound),
