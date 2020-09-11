@@ -1,11 +1,12 @@
-#[macro_use]
-extern crate clap;
+use clap::*;
+use slog::*;
 
-use clap::{App, AppSettings, Arg};
 use kvs::Result;
+use slog::Logger;
 use std::process;
 
 fn main() -> Result<()> {
+    let logger = get_logger();
     let matches = App::new("kvs-server")
         .version(crate_version!())
         .author(crate_authors!("\n"))
@@ -41,5 +42,18 @@ fn main() -> Result<()> {
         process::exit(0);
     }
 
+    info!(logger, "kvs initializing";
+        "version" => crate_version!(),
+         "ip" => matches.value_of("IP-PORT").unwrap()
+    );
+
     Ok(())
+}
+
+fn get_logger() -> Logger {
+    let drain = slog_term::TermDecorator::new().build();
+    let drain = slog_term::FullFormat::new(drain).build().fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+
+    slog::Logger::root(drain, o!())
 }
