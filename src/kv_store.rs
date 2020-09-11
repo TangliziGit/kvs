@@ -8,7 +8,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
-const COMPACTION_THRESHOLD: u64 = 1024;
+const COMPACTION_THRESHOLD: u64 = 1024 * 1024;
 
 /// Used to store a string key to a string value.
 ///
@@ -191,7 +191,7 @@ impl KvStore {
         self.readers.insert(self.current_gen - 1, compact_reader);
         self.readers.insert(self.current_gen, new_reader);
 
-        for (_, value) in self.index.iter() {
+        for (_, value) in self.index.iter_mut() {
             let CommandOffset { gen, pos, len } = value;
             let reader = self
                 .readers
@@ -201,16 +201,20 @@ impl KvStore {
             reader.seek(SeekFrom::Start(*pos))?;
             let mut buffer = vec![0; *len as usize];
             reader.read_exact(&mut buffer)?;
+
+            *pos = compact_writer.seek(SeekFrom::Current(0))?;
+            *gen = self.current_gen - 1;
             compact_writer.write_all(&buffer)?;
         }
 
-        let useless_logs = generations(&self.path)?
+        let stale_gens = generations(&self.path)?
             .into_iter()
             .filter(|gen| *gen <= self.current_gen - 2)
-            .map(|gen| db_path(&self.path, gen))
-            .collect::<Vec<PathBuf>>();
+            .collect::<Vec<u64>>();
 
-        for path in useless_logs {
+        for ref gen in stale_gens {
+            let path = db_path(&self.path, *gen);
+            self.readers.remove(gen);
             fs::remove_file(path)?;
         }
 
