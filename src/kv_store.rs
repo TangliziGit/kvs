@@ -6,6 +6,9 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom};
 use std::path::PathBuf;
+use std::ffi::OsStr;
+
+const COMPACTION_THRESHOLD: u64 = 1024;
 
 /// Used to store a string key to a string value.
 ///
@@ -26,8 +29,10 @@ use std::path::PathBuf;
 /// ```
 pub struct KvStore {
     writer: BufWriter<File>,
-    reader: BufReader<File>,
+    readers: HashMap<u64, BufReader<File>>,
     index: HashMap<String, CommandOffset>,
+    current_gen: u64,
+    uncompacted: u64,
 }
 
 impl KvStore {
@@ -37,15 +42,28 @@ impl KvStore {
         let path = path.into();
         fs::create_dir_all(&path)?;
 
-        let path = db_path(&path)?;
-        let writer = BufWriter::new(OpenOptions::new().write(true).open(&path)?);
-        let mut reader = BufReader::new(File::open(&path)?);
-        let index = load_index(&mut reader)?;
+        let mut readers = HashMap::new();
+        let mut index = HashMap::new();
+
+        let gens = generations(&path)?;
+        for  gen in gens.iter() {
+            let path = db_path(&path, *gen);
+            let mut reader = BufReader::new(File::open(path)?);
+
+            load_index(*gen, &mut reader, &mut index)?;
+            readers.insert(*gen, reader);
+        }
+
+        let current_gen = gens.last().unwrap_or(&0) + 1;
+        let (writer, reader) = new_db_log(&db_path(&path, current_gen))?;
+        readers.insert(current_gen, reader);
 
         Ok(KvStore {
             writer,
-            reader,
+            readers,
             index,
+            current_gen,
+            uncompacted: 0,
         })
     }
 
@@ -69,7 +87,13 @@ impl KvStore {
         serde_json::to_writer(&mut self.writer, &command)?;
 
         let new_pos = self.writer.seek(SeekFrom::Current(0))?;
-        self.index.insert(key, From::from(pos..new_pos));
+        if let Some(cmd) = self.index.insert(key, From::from((self.current_gen, pos..new_pos))) {
+            self.uncompacted += cmd.len;
+
+            if self.uncompacted >= COMPACTION_THRESHOLD {
+                self.compact()?;
+            }
+        }
 
         Ok(())
     }
@@ -88,11 +112,13 @@ impl KvStore {
     /// assert_eq!(value, None);
     /// ```
     pub fn get(&mut self, key: String) -> Result<Option<String>> {
-        if let Some(CommandOffset { pos, len }) = self.index.get(&key) {
-            self.reader.seek(SeekFrom::Start(*pos))?;
+        if let Some(CommandOffset { gen, pos, len }) = self.index.get(&key) {
+            let reader = self.readers.get_mut(&gen)
+                .expect("Can not find the log reader");
+            reader.seek(SeekFrom::Start(*pos))?;
 
             let mut buffer = vec![0u8; *len as usize];
-            self.reader.read_exact(&mut buffer)?;
+            reader.read_exact(&mut buffer)?;
 
             let cmd: Command = serde_json::from_slice(&buffer)?;
             if let Command::Set { key: _, value } = cmd {
@@ -127,39 +153,74 @@ impl KvStore {
                 self.writer.seek(SeekFrom::End(0))?;
                 serde_json::to_writer(&mut self.writer, &command)?;
 
-                self.index.remove(&key);
+                if let Some(CommandOffset { gen:_, pos: _, len }) = self.index.remove(&key) {
+                    self.uncompacted += len;
+
+                    if self.uncompacted >= COMPACTION_THRESHOLD {
+                        self.compact()?;
+                    }
+                }
 
                 Ok(())
             }
             None => Err(Error::KeyNotFound),
         }
     }
-}
 
-fn db_path(path: &PathBuf) -> Result<PathBuf> {
-    let path = path.join("kvs.db");
-
-    if !path.exists() {
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(&path)?;
+    /// Compacting the log file.
+    /// To support concurrent, use generation to maintain the log files.
+    pub fn compact(&mut self) -> Result<()> {
+        Ok(())
     }
-
-    Ok(path)
 }
 
-fn load_index(reader: &mut BufReader<File>) -> Result<HashMap<String, CommandOffset>> {
+fn db_path(path: &PathBuf, gen: u64) -> PathBuf {
+    let file_name = format!("{}.log", gen);
+    path.join(file_name)
+}
+
+fn new_db_log(path: &PathBuf) -> Result<(BufWriter<File>, BufReader<File>)> {
+    let file = OpenOptions::new()
+        .write(true)
+        .read(true)
+        .create(true)
+        .open(&path)?;
+
+    let writer = BufWriter::new(file.try_clone()?);
+    let reader = BufReader::new(file);
+
+    Ok((writer, reader))
+}
+
+fn generations(path: &PathBuf) -> Result<Vec<u64>> {
+    let mut gens = fs::read_dir(path)?
+        .flat_map(|entry| -> Result<_> {Ok(entry?.path())})
+        .filter(|path| path.is_file() && path.extension() == Some("log".as_ref()))
+        .flat_map(|path| path.file_name()
+            .and_then(OsStr::to_str)
+            .map(|str| str.trim_end_matches(".log"))
+            .map(str::parse::<u64>)
+        )
+        .flatten()
+        .collect::<Vec<u64>>();
+
+    gens.sort_unstable();
+    Ok(gens)
+}
+
+fn load_index(
+    gen: u64,
+    reader: &mut BufReader<File>,
+    index: &mut HashMap<String, CommandOffset>
+) -> Result<()> {
     let mut pos = reader.seek(SeekFrom::Start(0))?;
-    let mut index = HashMap::new();
-    let mut stream = Deserializer::from_reader(reader).into_iter::<Command>();
+    let mut stream =Deserializer::from_reader(reader).into_iter::<Command>();
     while let Some(cmd) = stream.next() {
         let new_pos = stream.byte_offset() as u64;
 
         match cmd? {
             Command::Set { key, value: _ } => {
-                index.insert(key, From::from(pos..new_pos));
+                index.insert(key, From::from((gen, pos..new_pos)));
             }
             Command::Remove { key } => {
                 index.remove(&key);
@@ -169,7 +230,7 @@ fn load_index(reader: &mut BufReader<File>) -> Result<HashMap<String, CommandOff
         pos = new_pos;
     }
 
-    Ok(index)
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -180,13 +241,15 @@ enum Command {
 
 #[derive(Debug)]
 struct CommandOffset {
+    gen: u64,
     pos: u64,
     len: u64,
 }
 
-impl From<Range<u64>> for CommandOffset {
-    fn from(range: Range<u64>) -> Self {
+impl From<(u64, Range<u64>)> for CommandOffset {
+    fn from((gen, range): (u64, Range<u64>)) -> Self {
         CommandOffset {
+            gen,
             pos: range.start,
             len: range.end - range.start,
         }
