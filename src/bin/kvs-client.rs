@@ -2,7 +2,7 @@
 extern crate clap;
 
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use kvs::{Request, Result, Response};
+use kvs::{Request, Response, Result};
 use std::io::Write;
 use std::net::TcpStream;
 use std::process;
@@ -72,6 +72,7 @@ fn main() -> Result<()> {
     run(matches)
 }
 
+// TODO: design and implement a kvs client in lib crate
 fn run(matches: ArgMatches) -> Result<()> {
     let (address, request) = match matches.subcommand() {
         ("set", Some(matches)) => {
@@ -140,12 +141,10 @@ fn run(matches: ArgMatches) -> Result<()> {
             eprintln!("{}", result.unwrap_err());
             process::exit(1);
         }
-        Response::Get(result) => {
-            match result.unwrap() {
-                Some(value) => println!("{}", value),
-                None => println!("Key not found"),
-            }
-        }
+        Response::Get(result) => match result.unwrap() {
+            Some(value) => println!("{}", value),
+            None => println!("Key not found"),
+        },
         _ => {}
     }
 

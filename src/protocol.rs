@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
-use serde::{Deserialize, Serialize};
 use failure::_core::fmt::Display;
+use serde::{Deserialize, Serialize};
 
 /// Used to communicate between clients and server.
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,7 +16,7 @@ pub enum Response {
     // impl Trait can not be written here.
     Set(Result<(), String>),
     Get(Result<Option<String>, String>),
-    Remove(Result<(), String>)
+    Remove(Result<(), String>),
 }
 
 impl Response {

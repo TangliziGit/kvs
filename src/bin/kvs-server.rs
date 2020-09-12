@@ -1,12 +1,12 @@
 use clap::*;
 use slog::*;
 
-use kvs::{KvStore, Request, Result, Response};
+use kvs::{KvStore, Request, Response, Result};
 use slog::Logger;
 use std::env::current_dir;
+use std::io::{BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process;
-use std::io::{Write, BufReader};
 
 fn main() -> Result<()> {
     let logger = get_logger();
@@ -72,21 +72,18 @@ fn get_logger() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
+// TODO: design and implement a kvs server in lib crate
 fn serve(logger: &Logger, mut stream: TcpStream, store: &mut KvStore) -> Result<()> {
     let mut reader = BufReader::new(&stream);
-    let mut reader =
-        serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Request>();
+    let mut reader = serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Request>();
 
     let request: Request = reader.next().unwrap()?; // serde_json::from_reader(&mut reader)?;
     info!(logger, "incoming request"; "request" => format!("{:?}", request));
 
     let response = match request {
-        Request::Set { key, value } =>
-            Response::set(store.set(key, value)),
-        Request::Get { key } =>
-            Response::get(store.get(key)),
-        Request::Remove { key } =>
-            Response::remove(store.remove(key)),
+        Request::Set { key, value } => Response::set(store.set(key, value)),
+        Request::Get { key } => Response::get(store.get(key)),
+        Request::Remove { key } => Response::remove(store.remove(key)),
     };
 
     let content = serde_json::to_vec(&response)?;

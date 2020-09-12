@@ -1,4 +1,4 @@
-use crate::error::{Error, Result, ErrorKind};
+use crate::error::{Error, ErrorKind, Result};
 use failure::_core::ops::Range;
 use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;

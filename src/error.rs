@@ -1,7 +1,7 @@
-use failure::{Fail, Context};
-use std::io;
-use std::fmt::{self, Display};
 use failure::_core::fmt::Formatter;
+use failure::{Context, Fail};
+use std::fmt::{self, Display};
+use std::io;
 
 /// Error traceable for kvs.
 #[derive(Debug)]
@@ -27,19 +27,25 @@ pub enum ErrorKind {
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
-        Error { inner: Context::new(ErrorKind::Io(err)) }
+        Error {
+            inner: Context::new(ErrorKind::Io(err)),
+        }
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
-        Error { inner: Context::new(ErrorKind::Serde(err)) }
+        Error {
+            inner: Context::new(ErrorKind::Serde(err)),
+        }
     }
 }
 
 impl From<ErrorKind> for Error {
     fn from(err: ErrorKind) -> Self {
-        Error { inner: Context::new(err) }
+        Error {
+            inner: Context::new(err),
+        }
     }
 }
 
