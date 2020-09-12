@@ -1,9 +1,17 @@
-use failure::Fail;
+use failure::{Fail, Context};
 use std::io;
+use std::fmt::{self, Display};
+use failure::_core::fmt::Formatter;
+
+/// Error traceable for kvs.
+#[derive(Debug)]
+pub struct Error {
+    inner: Context<ErrorKind>,
+}
 
 /// Error type for kvs.
 #[derive(Debug, Fail)]
-pub enum Error {
+pub enum ErrorKind {
     /// IO error.
     #[fail(display = "{}", _0)]
     Io(#[cause] io::Error),
@@ -19,13 +27,25 @@ pub enum Error {
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
-        Error::Io(err)
+        Error { inner: Context::new(ErrorKind::Io(err)) }
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
-        Error::Serde(err)
+        Error { inner: Context::new(ErrorKind::Serde(err)) }
+    }
+}
+
+impl From<ErrorKind> for Error {
+    fn from(err: ErrorKind) -> Self {
+        Error { inner: Context::new(err) }
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.inner, f)
     }
 }
 

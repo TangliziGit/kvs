@@ -3,7 +3,7 @@
 
 pub use error::{Error, Result};
 pub use kv_store::KvStore;
-pub use protocol::Protocol;
+pub use protocol::{Request, Response};
 
 mod error;
 mod kv_store;

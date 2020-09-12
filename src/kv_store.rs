@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, ErrorKind};
 use failure::_core::ops::Range;
 use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
@@ -87,6 +87,7 @@ impl KvStore {
 
         let pos = self.writer.seek(SeekFrom::End(0))?;
         serde_json::to_writer(&mut self.writer, &command)?;
+        self.writer.flush()?;
 
         let new_pos = self.writer.seek(SeekFrom::Current(0))?;
         if let Some(cmd) = self
@@ -159,6 +160,7 @@ impl KvStore {
 
                 self.writer.seek(SeekFrom::End(0))?;
                 serde_json::to_writer(&mut self.writer, &command)?;
+                self.writer.flush()?;
 
                 if let Some(CommandOffset {
                     gen: _,
@@ -175,7 +177,7 @@ impl KvStore {
 
                 Ok(())
             }
-            None => Err(Error::KeyNotFound),
+            None => Err(Error::from(ErrorKind::KeyNotFound)),
         }
     }
 
@@ -206,6 +208,7 @@ impl KvStore {
             *gen = self.current_gen - 1;
             compact_writer.write_all(&buffer)?;
         }
+        compact_writer.flush()?;
 
         let stale_gens = generations(&self.path)?
             .into_iter()

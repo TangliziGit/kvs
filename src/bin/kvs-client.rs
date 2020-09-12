@@ -2,7 +2,7 @@
 extern crate clap;
 
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use kvs::{Protocol, Result};
+use kvs::{Request, Result, Response};
 use std::io::Write;
 use std::net::TcpStream;
 use std::process;
@@ -73,39 +73,81 @@ fn main() -> Result<()> {
 }
 
 fn run(matches: ArgMatches) -> Result<()> {
-    let mut stream = TcpStream::connect("localhost:4000")?;
-
-    let request = match matches.subcommand() {
+    let (address, request) = match matches.subcommand() {
         ("set", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
             let value = matches
                 .value_of("VALUE")
                 .expect("VALUE argument is missing");
+            let address = matches
+                .value_of("IP-PORT")
+                .expect("IP-PORT argument is missing");
 
-            Protocol::Set {
-                key: key.to_string(),
-                value: value.to_string(),
-            }
+            (
+                address,
+                Request::Set {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                },
+            )
         }
         ("get", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
+            let address = matches
+                .value_of("IP-PORT")
+                .expect("IP-PORT argument is missing");
 
-            Protocol::Get {
-                key: key.to_string(),
-            }
+            (
+                address,
+                Request::Get {
+                    key: key.to_string(),
+                },
+            )
         }
         ("rm", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
+            let address = matches
+                .value_of("IP-PORT")
+                .expect("IP-PORT argument is missing");
 
-            Protocol::Remove {
-                key: key.to_string(),
-            }
+            (
+                address,
+                Request::Remove {
+                    key: key.to_string(),
+                },
+            )
         }
         _ => unreachable!(),
     };
 
     let request = serde_json::to_vec(&request)?;
+
+    let mut stream = TcpStream::connect(address)?;
     stream.write_all(request.as_slice())?;
+    stream.flush()?;
+
+    let response: Response = serde_json::from_reader(&mut stream)?;
+    match response {
+        Response::Set(result) if result.is_err() => {
+            eprintln!("{}", result.unwrap_err());
+            process::exit(1);
+        }
+        Response::Remove(result) if result.is_err() => {
+            eprintln!("{}", result.unwrap_err());
+            process::exit(1);
+        }
+        Response::Get(result) if result.is_err() => {
+            eprintln!("{}", result.unwrap_err());
+            process::exit(1);
+        }
+        Response::Get(result) => {
+            match result.unwrap() {
+                Some(value) => println!("{}", value),
+                None => println!("Key not found"),
+            }
+        }
+        _ => {}
+    }
 
     Ok(())
 }

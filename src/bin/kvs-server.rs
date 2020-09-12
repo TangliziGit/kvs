@@ -1,11 +1,12 @@
 use clap::*;
 use slog::*;
 
-use kvs::{KvStore, Protocol, Result};
+use kvs::{KvStore, Request, Result, Response};
 use slog::Logger;
 use std::env::current_dir;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::process;
+use std::io::{Write, BufReader};
 
 fn main() -> Result<()> {
     let logger = get_logger();
@@ -33,7 +34,7 @@ fn main() -> Result<()> {
             Arg::with_name("ENGINE-NAME")
                 .short("e")
                 .long("engine")
-                .possible_values(&["kvs", "sled"])
+                .possible_values(&["kvs"])
                 .default_value("kvs")
                 .help("a v4 or v6 IP address with a port number"),
         )
@@ -54,9 +55,13 @@ fn main() -> Result<()> {
         .expect("IP-PORT argument is missing.");
     let listener = TcpListener::bind(addr)?;
 
-    let store = KvStore::open(current_dir()?)?;
+    let mut store = KvStore::open(current_dir()?)?;
 
-    serve(logger, listener, store)
+    for stream in listener.incoming() {
+        serve(&logger, stream?, &mut store)?
+    }
+
+    Ok(())
 }
 
 fn get_logger() -> Logger {
@@ -67,27 +72,26 @@ fn get_logger() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-fn serve(logger: Logger, listener: TcpListener, mut _store: KvStore) -> Result<()> {
-    for stream in listener.incoming() {
-        let stream = stream?;
-        let request: Protocol = serde_json::from_reader(&stream)?;
+fn serve(logger: &Logger, mut stream: TcpStream, store: &mut KvStore) -> Result<()> {
+    let mut reader = BufReader::new(&stream);
+    let mut reader =
+        serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Request>();
 
-        info!(logger, "incoming request"; "request" => format!("{:?}", request));
-        match request {
-            Protocol::Set {
-                key: _key,
-                value: _value,
-            } => {
-                error!(logger, "unimplemented");
-            }
-            Protocol::Get { key: _key } => {
-                error!(logger, "unimplemented");
-            }
-            Protocol::Remove { key: _key } => {
-                error!(logger, "unimplemented");
-            }
-        }
-    }
+    let request: Request = reader.next().unwrap()?; // serde_json::from_reader(&mut reader)?;
+    info!(logger, "incoming request"; "request" => format!("{:?}", request));
+
+    let response = match request {
+        Request::Set { key, value } =>
+            Response::set(store.set(key, value)),
+        Request::Get { key } =>
+            Response::get(store.get(key)),
+        Request::Remove { key } =>
+            Response::remove(store.remove(key)),
+    };
+
+    let content = serde_json::to_vec(&response)?;
+    stream.write_all(&content)?;
+    stream.flush()?;
 
     Ok(())
 }
