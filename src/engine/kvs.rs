@@ -7,6 +7,7 @@ use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
+use crate::engine::KvsEngine;
 
 const COMPACTION_THRESHOLD: u64 = 1024 * 1024;
 
@@ -69,118 +70,6 @@ impl KvStore {
         })
     }
 
-    /// Sets the value of a string key to a string.
-    /// Return an error if the value is not written successfully.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use kvs::KvStore;
-    /// let mut kvs = KvStore::new();
-    /// kvs.set("key".to_string(), "value".to_string());
-    /// ```
-    pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        let command = Command::Set {
-            key: key.clone(),
-            value,
-        };
-
-        let pos = self.writer.seek(SeekFrom::End(0))?;
-        serde_json::to_writer(&mut self.writer, &command)?;
-        self.writer.flush()?;
-
-        let new_pos = self.writer.seek(SeekFrom::Current(0))?;
-        if let Some(cmd) = self
-            .index
-            .insert(key, From::from((self.current_gen, pos..new_pos)))
-        {
-            self.uncompacted += cmd.len;
-
-            if self.uncompacted >= COMPACTION_THRESHOLD {
-                self.compact()?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Gets the string value of the a string key.
-    /// If the key does not exist, return None.
-    /// Return an error if the value is not read successfully.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use kvs::KvStore;
-    /// let kvs = KvStore::new();
-    /// let value = kvs.get("key".to_string());
-    ///
-    /// assert_eq!(value, None);
-    /// ```
-    pub fn get(&mut self, key: String) -> Result<Option<String>> {
-        if let Some(CommandOffset { gen, pos, len }) = self.index.get(&key) {
-            let reader = self
-                .readers
-                .get_mut(&gen)
-                .expect("Can not find the log reader");
-            reader.seek(SeekFrom::Start(*pos))?;
-
-            let mut buffer = vec![0u8; *len as usize];
-            reader.read_exact(&mut buffer)?;
-
-            let cmd: Command = serde_json::from_slice(&buffer)?;
-            if let Command::Set { key: _, value } = cmd {
-                Ok(Some(value))
-            } else {
-                unreachable!()
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Removes a given key.
-    /// Return an error if the key does not exist or is not removed successfully.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use kvs::KvStore;
-    /// let mut kvs = KvStore::new();
-    /// kvs.set("key".to_string(), "value".to_string());
-    /// kvs.remove("key".to_string());
-    ///
-    /// let value = kvs.get("key".to_string());
-    /// assert_eq!(value, None);
-    /// ```
-    pub fn remove(&mut self, key: String) -> Result<()> {
-        match self.index.get(&key) {
-            Some(_) => {
-                let command = Command::Remove { key: key.clone() };
-
-                self.writer.seek(SeekFrom::End(0))?;
-                serde_json::to_writer(&mut self.writer, &command)?;
-                self.writer.flush()?;
-
-                if let Some(CommandOffset {
-                    gen: _,
-                    pos: _,
-                    len,
-                }) = self.index.remove(&key)
-                {
-                    self.uncompacted += len;
-
-                    if self.uncompacted >= COMPACTION_THRESHOLD {
-                        self.compact()?;
-                    }
-                }
-
-                Ok(())
-            }
-            None => Err(Error::from(ErrorKind::KeyNotFound)),
-        }
-    }
-
     /// Compacting the log file.
     /// To support concurrent, use generation to maintain the log files.
     pub fn compact(&mut self) -> Result<()> {
@@ -223,6 +112,122 @@ impl KvStore {
 
         Ok(())
     }
+}
+
+impl KvsEngine for KvStore {
+
+    /// Sets the value of a string key to a string.
+    /// Return an error if the value is not written successfully.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use kvs::KvStore;
+    /// let mut kvs = KvStore::new();
+    /// kvs.set("key".to_string(), "value".to_string());
+    /// ```
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        let command = Command::Set {
+            key: key.clone(),
+            value,
+        };
+
+        let pos = self.writer.seek(SeekFrom::End(0))?;
+        serde_json::to_writer(&mut self.writer, &command)?;
+        self.writer.flush()?;
+
+        let new_pos = self.writer.seek(SeekFrom::Current(0))?;
+        if let Some(cmd) = self
+            .index
+            .insert(key, From::from((self.current_gen, pos..new_pos)))
+        {
+            self.uncompacted += cmd.len;
+
+            if self.uncompacted >= COMPACTION_THRESHOLD {
+                self.compact()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Gets the string value of the a string key.
+    /// If the key does not exist, return None.
+    /// Return an error if the value is not read successfully.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use kvs::KvStore;
+    /// let kvs = KvStore::new();
+    /// let value = kvs.get("key".to_string());
+    ///
+    /// assert_eq!(value, None);
+    /// ```
+    fn get(&mut self, key: String) -> Result<Option<String>> {
+        if let Some(CommandOffset { gen, pos, len }) = self.index.get(&key) {
+            let reader = self
+                .readers
+                .get_mut(&gen)
+                .expect("Can not find the log reader");
+            reader.seek(SeekFrom::Start(*pos))?;
+
+            let mut buffer = vec![0u8; *len as usize];
+            reader.read_exact(&mut buffer)?;
+
+            let cmd: Command = serde_json::from_slice(&buffer)?;
+            if let Command::Set { key: _, value } = cmd {
+                Ok(Some(value))
+            } else {
+                unreachable!()
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Removes a given key.
+    /// Return an error if the key does not exist or is not removed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use kvs::KvStore;
+    /// let mut kvs = KvStore::new();
+    /// kvs.set("key".to_string(), "value".to_string());
+    /// kvs.remove("key".to_string());
+    ///
+    /// let value = kvs.get("key".to_string());
+    /// assert_eq!(value, None);
+    /// ```
+    fn remove(&mut self, key: String) -> Result<()> {
+        match self.index.get(&key) {
+            Some(_) => {
+                let command = Command::Remove { key: key.clone() };
+
+                self.writer.seek(SeekFrom::End(0))?;
+                serde_json::to_writer(&mut self.writer, &command)?;
+                self.writer.flush()?;
+
+                if let Some(CommandOffset {
+                    gen: _,
+                    pos: _,
+                    len,
+                }) = self.index.remove(&key)
+                {
+                    self.uncompacted += len;
+
+                    if self.uncompacted >= COMPACTION_THRESHOLD {
+                        self.compact()?;
+                    }
+                }
+
+                Ok(())
+            }
+            None => Err(Error::from(ErrorKind::KeyNotFound)),
+        }
+    }
+
 }
 
 fn db_path(path: &PathBuf, gen: u64) -> PathBuf {

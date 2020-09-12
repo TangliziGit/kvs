@@ -52,7 +52,14 @@ fn main() -> Result<()> {
         .value_of("IP-PORT")
         .expect("IP-PORT argument is missing.");
 
-    let store = KvStore::open(current_dir()?)?;
+    let store = match matches.value_of("ENGINE-NAME") {
+        Some("kvs") => KvStore::open(current_dir()?)?,
+        Some("sled") => unimplemented!(),
+        _ => {
+            eprintln!("Unsupported engine");
+            process::exit(1);
+        }
+    };
     let mut server = KvsServer::new(store);
 
     server.run(addr, &logger)
