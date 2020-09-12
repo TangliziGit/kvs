@@ -1,8 +1,10 @@
 use clap::*;
 use slog::*;
 
-use kvs::Result;
+use kvs::{KvStore, Protocol, Result};
 use slog::Logger;
+use std::env::current_dir;
+use std::net::TcpListener;
 use std::process;
 
 fn main() -> Result<()> {
@@ -47,7 +49,14 @@ fn main() -> Result<()> {
          "ip" => matches.value_of("IP-PORT").unwrap()
     );
 
-    Ok(())
+    let addr = matches
+        .value_of("IP-PORT")
+        .expect("IP-PORT argument is missing.");
+    let listener = TcpListener::bind(addr)?;
+
+    let store = KvStore::open(current_dir()?)?;
+
+    serve(logger, listener, store)
 }
 
 fn get_logger() -> Logger {
@@ -56,4 +65,29 @@ fn get_logger() -> Logger {
     let drain = slog_async::Async::new(drain).build().fuse();
 
     slog::Logger::root(drain, o!())
+}
+
+fn serve(logger: Logger, listener: TcpListener, mut _store: KvStore) -> Result<()> {
+    for stream in listener.incoming() {
+        let stream = stream?;
+        let request: Protocol = serde_json::from_reader(&stream)?;
+
+        info!(logger, "incoming request"; "request" => format!("{:?}", request));
+        match request {
+            Protocol::Set {
+                key: _key,
+                value: _value,
+            } => {
+                error!(logger, "unimplemented");
+            }
+            Protocol::Get { key: _key } => {
+                error!(logger, "unimplemented");
+            }
+            Protocol::Remove { key: _key } => {
+                error!(logger, "unimplemented");
+            }
+        }
+    }
+
+    Ok(())
 }

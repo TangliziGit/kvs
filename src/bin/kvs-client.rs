@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate clap;
 
-use clap::{App, AppSettings, Arg, SubCommand};
-use kvs::KvStore;
-use kvs::{Error, Result};
-use std::env::current_dir;
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+use kvs::{Protocol, Result};
+use std::io::Write;
+use std::net::TcpStream;
 use std::process;
 
 fn main() -> Result<()> {
@@ -69,43 +69,43 @@ fn main() -> Result<()> {
         process::exit(0);
     }
 
-    match matches.subcommand() {
+    run(matches)
+}
+
+fn run(matches: ArgMatches) -> Result<()> {
+    let mut stream = TcpStream::connect("localhost:4000")?;
+
+    let request = match matches.subcommand() {
         ("set", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
             let value = matches
                 .value_of("VALUE")
                 .expect("VALUE argument is missing");
 
-            let mut store = KvStore::open(current_dir()?)?;
-            store.set(key.to_string(), value.to_string())?;
+            Protocol::Set {
+                key: key.to_string(),
+                value: value.to_string(),
+            }
         }
         ("get", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
 
-            let mut store = KvStore::open(current_dir()?)?;
-            let value = store.get(key.to_string())?;
-
-            if let Some(value) = value {
-                println!("{}", value);
-            } else {
-                println!("Key not found");
+            Protocol::Get {
+                key: key.to_string(),
             }
         }
         ("rm", Some(matches)) => {
             let key = matches.value_of("KEY").expect("KEY argument is missing");
 
-            let mut store = KvStore::open(current_dir()?)?;
-            match store.remove(key.to_string()) {
-                Ok(_) => {}
-                Err(Error::KeyNotFound) => {
-                    println!("Key not found");
-                    process::exit(1);
-                }
-                Err(e) => return Err(e),
+            Protocol::Remove {
+                key: key.to_string(),
             }
         }
         _ => unreachable!(),
-    }
+    };
+
+    let request = serde_json::to_vec(&request)?;
+    stream.write_all(request.as_slice())?;
 
     Ok(())
 }
