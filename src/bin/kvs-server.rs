@@ -1,11 +1,9 @@
 use clap::*;
 use slog::*;
 
-use kvs::{KvStore, Request, Response, Result};
+use kvs::{KvStore, Result, KvsServer};
 use slog::Logger;
 use std::env::current_dir;
-use std::io::{BufReader, Write};
-use std::net::{TcpListener, TcpStream};
 use std::process;
 
 fn main() -> Result<()> {
@@ -53,15 +51,11 @@ fn main() -> Result<()> {
     let addr = matches
         .value_of("IP-PORT")
         .expect("IP-PORT argument is missing.");
-    let listener = TcpListener::bind(addr)?;
 
-    let mut store = KvStore::open(current_dir()?)?;
+    let store = KvStore::open(current_dir()?)?;
+    let mut server = KvsServer::new(store);
 
-    for stream in listener.incoming() {
-        serve(&logger, stream?, &mut store)?
-    }
-
-    Ok(())
+    server.run(addr, &logger)
 }
 
 fn get_logger() -> Logger {
@@ -72,23 +66,3 @@ fn get_logger() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-// TODO: design and implement a kvs server in lib crate
-fn serve(logger: &Logger, mut stream: TcpStream, store: &mut KvStore) -> Result<()> {
-    let mut reader = BufReader::new(&stream);
-    let mut reader = serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Request>();
-
-    let request: Request = reader.next().unwrap()?; // serde_json::from_reader(&mut reader)?;
-    info!(logger, "incoming request"; "request" => format!("{:?}", request));
-
-    let response = match request {
-        Request::Set { key, value } => Response::set(store.set(key, value)),
-        Request::Get { key } => Response::get(store.get(key)),
-        Request::Remove { key } => Response::remove(store.remove(key)),
-    };
-
-    let content = serde_json::to_vec(&response)?;
-    stream.write_all(&content)?;
-    stream.flush()?;
-
-    Ok(())
-}

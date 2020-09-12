@@ -3,7 +3,7 @@ extern crate clap;
 
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use kvs::{Request, Response, Result};
-use std::io::Write;
+use std::io::{Write, BufWriter, BufReader};
 use std::net::TcpStream;
 use std::process;
 
@@ -123,11 +123,15 @@ fn run(matches: ArgMatches) -> Result<()> {
 
     let request = serde_json::to_vec(&request)?;
 
-    let mut stream = TcpStream::connect(address)?;
-    stream.write_all(request.as_slice())?;
-    stream.flush()?;
+    let stream = TcpStream::connect(address)?;
+    let mut writer = BufWriter::new(&stream);
+    let mut reader = BufReader::new(&stream);
+    let mut reader =
+        serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Response>();
+    writer.write_all(request.as_slice())?;
+    writer.flush()?;
 
-    let response: Response = serde_json::from_reader(&mut stream)?;
+    let response: Response = reader.next().unwrap()?;
     match response {
         Response::Set(result) if result.is_err() => {
             eprintln!("{}", result.unwrap_err());
