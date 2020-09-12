@@ -23,6 +23,14 @@ pub enum ErrorKind {
     /// Error for key not found.
     #[fail(display = "Key not found")]
     KeyNotFound,
+
+    /// Error a KvsClient may receives containing a string.
+    #[fail(display = "{}", _0)]
+    StringError(String),
+
+    /// Error for unexpected status.
+    #[fail(display = "Unexpected: {}", _0)]
+    UnexpectedError(&'static str),
 }
 
 impl From<io::Error> for Error {

@@ -2,9 +2,7 @@
 extern crate clap;
 
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use kvs::{Request, Response, Result};
-use std::io::{Write, BufWriter, BufReader};
-use std::net::TcpStream;
+use kvs::{Result, KvsClient};
 use std::process;
 
 fn main() -> Result<()> {
@@ -72,85 +70,63 @@ fn main() -> Result<()> {
     run(matches)
 }
 
-// TODO: design and implement a kvs client in lib crate
 fn run(matches: ArgMatches) -> Result<()> {
-    let (address, request) = match matches.subcommand() {
+    match matches.subcommand() {
         ("set", Some(matches)) => {
-            let key = matches.value_of("KEY").expect("KEY argument is missing");
+            let key = matches
+                .value_of("KEY")
+                .map(ToString::to_string)
+                .expect("KEY argument is missing");
             let value = matches
                 .value_of("VALUE")
+                .map(ToString::to_string)
                 .expect("VALUE argument is missing");
             let address = matches
                 .value_of("IP-PORT")
                 .expect("IP-PORT argument is missing");
 
-            (
-                address,
-                Request::Set {
-                    key: key.to_string(),
-                    value: value.to_string(),
-                },
-            )
+            let mut client = KvsClient::connect(address)?;
+            if let Err(err) = client.set(key, value) {
+                eprintln!("{}", err);
+                process::exit(1);
+            }
         }
         ("get", Some(matches)) => {
-            let key = matches.value_of("KEY").expect("KEY argument is missing");
+            let key = matches
+                .value_of("KEY")
+                .map(ToString::to_string)
+                .expect("KEY argument is missing");
             let address = matches
                 .value_of("IP-PORT")
                 .expect("IP-PORT argument is missing");
 
-            (
-                address,
-                Request::Get {
-                    key: key.to_string(),
-                },
-            )
+            let mut client = KvsClient::connect(address)?;
+            match client.get(key) {
+                Ok(Some(value)) => println!("{}", value),
+                Ok(None) => println!("Key not found"),
+                Err(err) => {
+                    eprintln!("{}", err);
+                    process::exit(1);
+                }
+            }
         }
         ("rm", Some(matches)) => {
-            let key = matches.value_of("KEY").expect("KEY argument is missing");
+            let key = matches
+                .value_of("KEY")
+                .map(ToString::to_string)
+                .expect("KEY argument is missing");
             let address = matches
                 .value_of("IP-PORT")
                 .expect("IP-PORT argument is missing");
 
-            (
-                address,
-                Request::Remove {
-                    key: key.to_string(),
-                },
-            )
+            let mut client = KvsClient::connect(address)?;
+            if let Err(err) = client.remove(key) {
+                eprintln!("{}", err);
+                process::exit(1);
+            }
         }
         _ => unreachable!(),
     };
-
-    let request = serde_json::to_vec(&request)?;
-
-    let stream = TcpStream::connect(address)?;
-    let mut writer = BufWriter::new(&stream);
-    let mut reader = BufReader::new(&stream);
-    let mut reader =
-        serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Response>();
-    writer.write_all(request.as_slice())?;
-    writer.flush()?;
-
-    let response: Response = reader.next().unwrap()?;
-    match response {
-        Response::Set(result) if result.is_err() => {
-            eprintln!("{}", result.unwrap_err());
-            process::exit(1);
-        }
-        Response::Remove(result) if result.is_err() => {
-            eprintln!("{}", result.unwrap_err());
-            process::exit(1);
-        }
-        Response::Get(result) if result.is_err() => {
-            eprintln!("{}", result.unwrap_err());
-            process::exit(1);
-        }
-        Response::Get(result) => match result.unwrap() {
-            Some(value) => println!("{}", value),
-            None => println!("Key not found"),
-        },
-        _ => {}
-    }
 
     Ok(())
 }
