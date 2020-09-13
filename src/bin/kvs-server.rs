@@ -1,10 +1,12 @@
 use clap::*;
 use slog::*;
 
-use kvs::{KvStore, Result, KvsServer};
+use kvs::{KvStore, Result, KvsServer, SledKvsEngine, KvsEngine};
 use slog::Logger;
 use std::env::current_dir;
 use std::process;
+use std::fs;
+use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let logger = get_logger();
@@ -32,7 +34,7 @@ fn main() -> Result<()> {
             Arg::with_name("ENGINE-NAME")
                 .short("e")
                 .long("engine")
-                .possible_values(&["kvs"])
+                .possible_values(&["kvs", "sled"])
                 .default_value("kvs")
                 .help("a v4 or v6 IP address with a port number"),
         )
@@ -43,26 +45,15 @@ fn main() -> Result<()> {
         process::exit(0);
     }
 
-    info!(logger, "kvs initializing";
-        "version" => crate_version!(),
-         "ip" => matches.value_of("IP-PORT").unwrap()
-    );
-
     let addr = matches
         .value_of("IP-PORT")
         .expect("IP-PORT argument is missing.");
 
-    let store = match matches.value_of("ENGINE-NAME") {
-        Some("kvs") => KvStore::open(current_dir()?)?,
-        Some("sled") => unimplemented!(),
-        _ => {
-            eprintln!("Unsupported engine");
-            process::exit(1);
-        }
-    };
-    let mut server = KvsServer::new(store);
+    let engine = matches
+        .value_of("ENGINE-NAME")
+        .expect("ENGINE-NAME argument is missing.");
 
-    server.run(addr, &logger)
+    run(addr, engine, logger)
 }
 
 fn get_logger() -> Logger {
@@ -73,3 +64,45 @@ fn get_logger() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
+fn run(addr: &str, engine: &str, logger: Logger) -> Result<()> {
+    info!(logger, "kvs initializing";
+        "version" => crate_version!(),
+        "engine" => engine,
+         "ip" => addr
+    );
+
+    let current_dir = current_dir()?;
+    match current_engine(&current_dir)? {
+        Some(e) if e != engine => {
+            error!(logger, "wrong engine in this directory");
+            process::exit(1);
+        }
+        _ => ()
+    }
+
+    fs::write(current_dir.join("engine"), engine)?;
+
+    match engine {
+        "kvs" => run_with_engine(KvStore::open(current_dir)?, addr, logger),
+        "sled" => run_with_engine(SledKvsEngine::open(current_dir)?, addr, logger),
+        _ => {
+            eprintln!("Unsupported engine");
+            process::exit(1);
+        }
+    }
+}
+
+fn run_with_engine(engine: impl KvsEngine, addr: &str, logger: Logger) -> Result<()> {
+    let mut server = KvsServer::new(engine);
+    server.run(addr, &logger)
+}
+
+fn current_engine(path: &PathBuf) -> Result<Option<String>> {
+    let path = path.join("engine");
+    if !path.exists() {
+        return Ok(None)
+    }
+
+    let engine = fs::read_to_string(path)?;
+    Ok(Some(engine))
+}

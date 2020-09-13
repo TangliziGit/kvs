@@ -17,15 +17,17 @@ const COMPACTION_THRESHOLD: u64 = 1024 * 1024;
 ///
 /// ```
 /// # use kvs::KvStore;
-/// let mut kvs = KvStore::new();
+/// # use kvs::KvsEngine;
+/// # use std::env::current_dir;
+/// let mut kvs = KvStore::open(current_dir().unwrap()).unwrap();
 ///
 /// kvs.set("key".to_string(), "value".to_string());
 ///
-/// let val = kvs.get("key".to_string());
+/// let val = kvs.get("key".to_string()).unwrap();
 /// assert_eq!(val, Some("value".to_string()));
 ///
 /// kvs.remove("key".to_string());
-/// let val = kvs.get("key".to_string());
+/// let val = kvs.get("key".to_string()).unwrap();
 /// assert_eq!(val, None);
 /// ```
 pub struct KvStore {
@@ -123,7 +125,9 @@ impl KvsEngine for KvStore {
     ///
     /// ```
     /// # use kvs::KvStore;
-    /// let mut kvs = KvStore::new();
+    /// # use kvs::KvsEngine;
+    /// # use std::env::current_dir;
+    /// let mut kvs = KvStore::open(current_dir().unwrap()).unwrap();
     /// kvs.set("key".to_string(), "value".to_string());
     /// ```
     fn set(&mut self, key: String, value: String) -> Result<()> {
@@ -159,8 +163,10 @@ impl KvsEngine for KvStore {
     ///
     /// ```
     /// # use kvs::KvStore;
-    /// let kvs = KvStore::new();
-    /// let value = kvs.get("key".to_string());
+    /// # use kvs::KvsEngine;
+    /// # use std::env::current_dir;
+    /// let mut kvs = KvStore::open(current_dir().unwrap()).unwrap();
+    /// let value = kvs.get("non-exist-key".to_string()).unwrap();
     ///
     /// assert_eq!(value, None);
     /// ```
@@ -193,11 +199,13 @@ impl KvsEngine for KvStore {
     ///
     /// ```
     /// # use kvs::KvStore;
-    /// let mut kvs = KvStore::new();
+    /// # use kvs::KvsEngine;
+    /// # use std::env::current_dir;
+    /// let mut kvs = KvStore::open(current_dir().unwrap()).unwrap();
     /// kvs.set("key".to_string(), "value".to_string());
     /// kvs.remove("key".to_string());
     ///
-    /// let value = kvs.get("key".to_string());
+    /// let value = kvs.get("key".to_string()).unwrap();
     /// assert_eq!(value, None);
     /// ```
     fn remove(&mut self, key: String) -> Result<()> {

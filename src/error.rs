@@ -2,6 +2,7 @@ use failure::_core::fmt::Formatter;
 use failure::{Context, Fail};
 use std::fmt::{self, Display};
 use std::io;
+use std::string::FromUtf8Error;
 
 /// Error traceable for kvs.
 #[derive(Debug)]
@@ -20,9 +21,17 @@ pub enum ErrorKind {
     #[fail(display = "{}", _0)]
     Serde(#[cause] serde_json::Error),
 
+    /// Sled error.
+    #[fail(display = "{}", _0)]
+    Sled(#[cause] sled::Error),
+
     /// Error for key not found.
     #[fail(display = "Key not found")]
     KeyNotFound,
+
+    /// Error for bytes-String conversion.
+    #[fail(display = "Can not convert bytes into string")]
+    FromUtf8Error,
 
     /// Error a KvsClient may receives containing a string.
     #[fail(display = "{}", _0)]
@@ -45,6 +54,22 @@ impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Error {
             inner: Context::new(ErrorKind::Serde(err)),
+        }
+    }
+}
+
+impl From<sled::Error> for Error {
+    fn from(err: sled::Error) -> Self {
+        Error {
+            inner: Context::new(ErrorKind::Sled(err)),
+        }
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(_: FromUtf8Error) -> Self {
+        Error {
+            inner: Context::new(ErrorKind::FromUtf8Error),
         }
     }
 }

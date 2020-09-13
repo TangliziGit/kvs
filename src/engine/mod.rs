@@ -1,4 +1,5 @@
 pub(crate) mod kvs;
+pub(crate) mod sled;
 
 use crate::{Result};
 
