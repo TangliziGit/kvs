@@ -36,7 +36,7 @@ fn main() -> Result<()> {
                 .long("engine")
                 .possible_values(&["kvs", "sled"])
                 .default_value("kvs")
-                .help("a v4 or v6 IP address with a port number"),
+                .help("the key-value store engine name"),
         )
         .get_matches();
 
