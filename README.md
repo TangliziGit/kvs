@@ -63,6 +63,7 @@ This benchmark compares it with [sled](https://github.com/spacejam/sled) (A mode
 `kvs` engine has lower spaces and faster speed, because it has very basic function like setting, getting, removing k/v pairs and log compaction.  
 The benchmark result is showed below.  
 
+![full_operation_benchmark](https://raw.githubusercontent.com/TangliziGit/kvs/master/doc/full_operation_benchmark.svg)
 
 ## Reference
 
