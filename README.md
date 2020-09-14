@@ -64,6 +64,8 @@ This benchmark compares it with [sled](https://github.com/spacejam/sled) (A mode
 The benchmark result is showed below.  
 
 ![full_operation_benchmark](https://raw.githubusercontent.com/TangliziGit/kvs/master/doc/full_operation_benchmark.svg)
+ 
+For example, when set, get and remove 2^16 k/v pairs, `kvs` uses 350ms and 4.05MB while `sled` uses 2176ms and 7.45MB.
 
 ## Reference
 
