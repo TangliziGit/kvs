@@ -1,7 +1,7 @@
 use crate::engine::KvsEngine;
 use crate::Result;
 use crate::{Request, Response};
-use slog::{info, o, Logger};
+use slog::{info, error, o, Logger};
 use std::io::{BufReader, BufWriter, Write};
 use std::net::{TcpListener, TcpStream};
 
@@ -39,18 +39,22 @@ impl<E: KvsEngine> KvsServer<E> {
         let reader = serde_json::de::Deserializer::from_reader(&mut reader).into_iter::<Request>();
 
         for request in reader {
-            let request = request?;
-            info!(logger, "request came"; "request" => format!("{:?}", request));
+            if let Ok(request) = request {
+                info!(logger, "request came"; "request" => format!("{:?}", request));
 
-            let response = match request {
-                Request::Set { key, value } => Response::set(self.store.set(key, value)),
-                Request::Get { key } => Response::get(self.store.get(key)),
-                Request::Remove { key } => Response::remove(self.store.remove(key)),
-            };
+                let response = match request {
+                    Request::Set { key, value } => Response::set(self.store.set(key, value)),
+                    Request::Get { key } => Response::get(self.store.get(key)),
+                    Request::Remove { key } => Response::remove(self.store.remove(key)),
+                };
 
-            let content = serde_json::to_vec(&response)?;
-            writer.write_all(&content)?;
-            writer.flush()?;
+                info!(logger, "reply"; "response" => format!("{:?}", response));
+                let content = serde_json::to_vec(&response)?;
+                writer.write_all(&content)?;
+                writer.flush()?;
+            } else {
+                error!(logger, "can not parse the request");
+            }
         }
 
         Ok(())
