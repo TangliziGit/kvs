@@ -1,8 +1,8 @@
 use crate::engine::KvsEngine;
+use crate::error::ErrorKind;
 use crate::Result;
 use sled::Db;
 use std::path::PathBuf;
-use crate::error::ErrorKind;
 
 /// Used to store a string key to a string value with sled engine.
 pub struct SledKvsEngine {
@@ -10,7 +10,6 @@ pub struct SledKvsEngine {
 }
 
 impl SledKvsEngine {
-
     /// Open the SledKvsEngine at a given path.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
@@ -23,7 +22,6 @@ impl SledKvsEngine {
 }
 
 impl KvsEngine for SledKvsEngine {
-
     /// Sets the value of a string key to a string.
     /// Return an error if the value is not written successfully.
     fn set(&mut self, key: String, value: String) -> Result<()> {
@@ -39,7 +37,7 @@ impl KvsEngine for SledKvsEngine {
         let ivec = self.db.get(key)?;
         let ivec = match ivec {
             Some(ivec) => Some(String::from_utf8(ivec.to_vec())?),
-            None => None
+            None => None,
         };
 
         self.db.flush()?;
@@ -49,10 +47,8 @@ impl KvsEngine for SledKvsEngine {
     /// Removes a given key.
     /// Return an error if the key does not exist or is not removed successfully.
     fn remove(&mut self, key: String) -> Result<()> {
-        self.db.remove(key)?
-            .ok_or(ErrorKind::KeyNotFound)?;
+        self.db.remove(key)?.ok_or(ErrorKind::KeyNotFound)?;
         self.db.flush()?;
         Ok(())
     }
 }
-

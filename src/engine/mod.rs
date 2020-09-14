@@ -1,15 +1,13 @@
 pub(crate) mod kvs;
 pub(crate) mod sled;
 
-use crate::{Result};
+use crate::Result;
 
 /// KvsEngine trait provides key-value store methods.
 pub trait KvsEngine {
-
     /// Sets the value of a string key to a string.
     /// Return an error if the value is not written successfully.
     fn set(&mut self, key: String, value: String) -> Result<()>;
-
 
     /// Gets the string value of the a string key.
     /// If the key does not exist, return None.

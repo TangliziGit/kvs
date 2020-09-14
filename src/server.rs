@@ -1,9 +1,9 @@
-use slog::{Logger, info, o};
-use std::net::{TcpStream, TcpListener};
-use std::io::{BufReader, Write, BufWriter};
-use crate::{Response, Request};
-use crate::{Result};
 use crate::engine::KvsEngine;
+use crate::Result;
+use crate::{Request, Response};
+use slog::{info, o, Logger};
+use std::io::{BufReader, BufWriter, Write};
+use std::net::{TcpListener, TcpStream};
 
 /// The server of key-value store.
 pub struct KvsServer<E: KvsEngine> {
@@ -11,7 +11,6 @@ pub struct KvsServer<E: KvsEngine> {
 }
 
 impl<E: KvsEngine> KvsServer<E> {
-
     /// Create a new key-value store server.
     #[inline]
     pub fn new(store: E) -> Self {

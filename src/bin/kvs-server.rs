@@ -1,12 +1,12 @@
 use clap::*;
 use slog::*;
 
-use kvs::{KvStore, Result, KvsServer, SledKvsEngine, KvsEngine};
+use kvs::{KvStore, KvsEngine, KvsServer, Result, SledKvsEngine};
 use slog::Logger;
 use std::env::current_dir;
-use std::process;
 use std::fs;
 use std::path::PathBuf;
+use std::process;
 
 fn main() -> Result<()> {
     let logger = get_logger();
@@ -77,7 +77,7 @@ fn run(addr: &str, engine: &str, logger: Logger) -> Result<()> {
             error!(logger, "wrong engine in this directory");
             process::exit(1);
         }
-        _ => ()
+        _ => (),
     }
 
     fs::write(current_dir.join("engine"), engine)?;
@@ -100,7 +100,7 @@ fn run_with_engine(engine: impl KvsEngine, addr: &str, logger: Logger) -> Result
 fn current_engine(path: &PathBuf) -> Result<Option<String>> {
     let path = path.join("engine");
     if !path.exists() {
-        return Ok(None)
+        return Ok(None);
     }
 
     let engine = fs::read_to_string(path)?;

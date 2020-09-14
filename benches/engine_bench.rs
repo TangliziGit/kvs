@@ -1,144 +1,143 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use kvs::{KvStore, KvsEngine, SledKvsEngine};
-use tempfile::TempDir;
 use rand::Rng;
+use tempfile::TempDir;
+use walkdir::WalkDir;
+
+const SCALE: [u32; 7] = [4, 6, 8, 10, 12, 14, 16];
+
+fn dir_size(dir: &TempDir) -> u64 {
+    let entries = WalkDir::new(dir.path()).into_iter();
+    let len: walkdir::Result<u64> = entries
+        .map(|res| {
+            res.and_then(|entry| entry.metadata())
+                .map(|metadata| metadata.len())
+        })
+        .sum();
+    len.expect("fail to get directory size")
+}
 
 pub fn set_bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("engine set method");
+    let mut group = c.benchmark_group("set");
 
-    for i in [8, 12].iter() {
+    for i in SCALE.iter() {
+        let (mut size, mut cnt) = (0, 0);
+        group.bench_with_input(BenchmarkId::new("kvs", i), i, |b, n| {
+            b.iter(|| {
+                let dir = TempDir::new().unwrap();
+                let path = dir.path();
+                let mut kvs = KvStore::open(path).unwrap();
 
-        group.bench_with_input(BenchmarkId::new("kvs", i), i, |b, n| b.iter(|| {
-            let dir = TempDir::new().unwrap();
-            let path = dir.path();
-            let mut kvs = KvStore::open(path).unwrap();
+                let value = "value".to_string();
+                for i in 0..(1 << n) {
+                    let key = format!("key{}", i);
+                    kvs.set(key, value.clone()).unwrap();
+                }
 
-            let value = "value".to_string();
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", i);
-                kvs.set(key, value.clone()).unwrap();
-            }
-        }));
+                size += dir_size(&dir);
+                cnt += 1;
+            })
+        });
+        println!("kvs[{}] dir size: {}", i, (size as f64) / (cnt as f64));
 
-        group.bench_with_input(BenchmarkId::new("sled", i), i, |b, n| b.iter(|| {
-            let dir = TempDir::new().unwrap();
-            let path = dir.path();
-            let mut sled = SledKvsEngine::open(path).unwrap();
+        let (mut size, mut cnt) = (0, 0);
+        group.bench_with_input(BenchmarkId::new("sled", i), i, |b, n| {
+            b.iter(|| {
+                let dir = TempDir::new().unwrap();
+                let path = dir.path();
+                let mut sled = SledKvsEngine::open(path).unwrap();
 
-            let value = "value".to_string();
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", i);
-                sled.set(key, value.clone()).unwrap();
-            }
-        }));
+                let value = "value".to_string();
+                for i in 0..(1 << n) {
+                    let key = format!("key{}", i);
+                    sled.set(key, value.clone()).unwrap();
+                }
+
+                size += dir_size(&dir);
+                cnt += 1;
+            })
+        });
+        println!("sled[{}] dir size: {}", i, (size as f64) / (cnt as f64));
     }
 }
 
-pub fn set_get_bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("engine get method");
+pub fn full_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("full");
 
-    for i in [8, 12].iter() {
+    for scale in SCALE.iter() {
+        {
+            let (mut size, mut cnt) = (0, 0);
+            group.bench_with_input(BenchmarkId::new("kvs", scale), scale, |b, n| {
+                b.iter(|| {
+                    let dir = TempDir::new().unwrap();
+                    let path = dir.path();
 
-        group.bench_with_input(BenchmarkId::new("kvs", i), i, |b, n| b.iter(|| {
-            let dir = TempDir::new().unwrap();
-            let path = dir.path();
-            let mut kvs = KvStore::open(path).unwrap();
+                    let mut kvs = KvStore::open(path).unwrap();
+                    for i in 0..(1 << scale) {
+                        let key = format!("key{}", i);
+                        let value = format!("value{}", i);
 
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", i);
-                let value = format!("value{}", i);
+                        kvs.set(key, value).unwrap();
+                    }
 
-                kvs.set(key, value).unwrap();
-            }
+                    let mut rng = rand::thread_rng();
+                    for _i in 0..(1 << n) {
+                        let key = format!("key{}", rng.gen_range(0, 1 << n));
+                        kvs.get(key).unwrap();
+                    }
 
-            let mut rng = rand::thread_rng();
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", rng.gen_range(0, 1<<n));
-                kvs.get(key).unwrap();
-            }
-        }));
+                    let mut rng = rand::thread_rng();
+                    for _i in 0..(1 << n) {
+                        let key = format!("key{}", rng.gen_range(0, 1 << n));
+                        match kvs.remove(key) {
+                            _ => (),
+                        }
+                    }
 
-        group.bench_with_input(BenchmarkId::new("sled", i), i, |b, n| b.iter(|| {
-            let dir = TempDir::new().unwrap();
-            let path = dir.path();
-            let mut sled = SledKvsEngine::open(path).unwrap();
+                    size += dir_size(&dir);
+                    cnt += 1;
+                })
+            });
+            println!("kvs[{}] dir size: {}", scale, (size as f64) / (cnt as f64));
+        }
 
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", i);
-                let value = format!("value{}", i);
+        {
+            let (mut size, mut cnt) = (0, 0);
+            group.bench_with_input(BenchmarkId::new("sled", scale), scale, |b, n| {
+                b.iter(|| {
+                    let dir = TempDir::new().unwrap();
+                    let path = dir.path();
 
-                sled.set(key, value).unwrap();
-            }
+                    let mut sled = SledKvsEngine::open(path).unwrap();
+                    for i in 0..(1 << scale) {
+                        let key = format!("key{}", i);
+                        let value = format!("value{}", i);
 
-            let mut rng = rand::thread_rng();
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", rng.gen_range(0, 1<<n));
-                sled.get(key).unwrap();
-            }
-        }));
+                        sled.set(key, value).unwrap();
+                    }
+
+                    let mut rng = rand::thread_rng();
+                    for _i in 0..(1 << n) {
+                        let key = format!("key{}", rng.gen_range(0, 1 << n));
+                        sled.get(key).unwrap();
+                    }
+
+                    let mut rng = rand::thread_rng();
+                    for _i in 0..(1 << n) {
+                        let key = format!("key{}", rng.gen_range(0, 1 << n));
+                        match sled.remove(key) {
+                            _ => (),
+                        }
+                    }
+
+                    size += dir_size(&dir);
+                    cnt += 1;
+                })
+            });
+            println!("sled[{}] dir size: {}", scale, (size as f64) / (cnt as f64));
+        }
     }
 }
 
-pub fn set_get_rm_bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("engine rm method");
-
-    for i in [8, 12].iter() {
-
-        group.bench_with_input(BenchmarkId::new("kvs", i), i, |b, n| b.iter(|| {
-            let dir = TempDir::new().unwrap();
-            let path = dir.path();
-            let mut kvs = KvStore::open(path).unwrap();
-
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", i);
-                let value = format!("value{}", i);
-
-                kvs.set(key, value).unwrap();
-            }
-
-            let mut rng = rand::thread_rng();
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", rng.gen_range(0, 1<<n));
-                kvs.get(key).unwrap();
-            }
-
-            let mut rest = 1 << (n / 2);
-            let mut rng = rand::thread_rng();
-            while rest >= 0 {
-                let key = format!("key{}", rng.gen_range(0, 1<<n));
-                kvs.remove(key);
-                rest -= 1;
-            }
-        }));
-
-        group.bench_with_input(BenchmarkId::new("sled", i), i, |b, n| b.iter(|| {
-            let dir = TempDir::new().unwrap();
-            let path = dir.path();
-            let mut sled = SledKvsEngine::open(path).unwrap();
-
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", i);
-                let value = format!("value{}", i);
-
-                sled.set(key, value).unwrap();
-            }
-
-            let mut rng = rand::thread_rng();
-            for _i in 0..(1<<n) {
-                let key = format!("key{}", rng.gen_range(0, 1<<n));
-                sled.get(key).unwrap();
-            }
-
-            let mut rest = 1 << (n / 2);
-            let mut rng = rand::thread_rng();
-            while rest >= 0 {
-                let key = format!("key{}", rng.gen_range(0, 1<<n));
-                sled.remove(key);
-                rest -= 1;
-            }
-        }));
-    }
-}
-
-criterion_group!(benches, set_bench, set_get_bench, set_get_rm_bench);
+criterion_group!(benches, set_bench, full_bench);
 criterion_main!(benches);

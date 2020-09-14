@@ -2,7 +2,7 @@
 extern crate clap;
 
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use kvs::{Result, KvsClient};
+use kvs::{KvsClient, Result};
 use std::process;
 
 fn main() -> Result<()> {

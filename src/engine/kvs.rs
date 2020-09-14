@@ -1,3 +1,4 @@
+use crate::engine::KvsEngine;
 use crate::error::{Error, ErrorKind, Result};
 use failure::_core::ops::Range;
 use serde::{Deserialize, Serialize};
@@ -7,9 +8,8 @@ use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use crate::engine::KvsEngine;
 
-const COMPACTION_THRESHOLD: u64 = 1024 * 1024;
+const COMPACTION_THRESHOLD: u64 = 4 * 1024 * 1024;
 
 /// Used to store a string key to a string value.
 ///
@@ -44,6 +44,7 @@ impl KvStore {
     /// Return the KvStore.
     pub fn open(path: impl Into<PathBuf>) -> Result<KvStore> {
         let path = path.into();
+        let path = path.join("kvs.db");
         fs::create_dir_all(&path)?;
 
         let mut readers = HashMap::new();
@@ -117,7 +118,6 @@ impl KvStore {
 }
 
 impl KvsEngine for KvStore {
-
     /// Sets the value of a string key to a string.
     /// Return an error if the value is not written successfully.
     ///
@@ -235,7 +235,6 @@ impl KvsEngine for KvStore {
             None => Err(Error::from(ErrorKind::KeyNotFound)),
         }
     }
-
 }
 
 fn db_path(path: &PathBuf, gen: u64) -> PathBuf {
