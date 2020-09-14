@@ -73,5 +73,5 @@ The benchmark result is showed below.
 - [The Design and Implementation of a Log-Structured File System](https://people.eecs.berkeley.edu/~brewer/cs262/LFS.pdf)
 - [Bitcask: A Log-Structured Hash Table for Fast Key/Value Data](https://github.com/basho/bitcask/blob/develop/doc/bitcask-intro.pdf)
 - [Redis Protocol specification](https://redis.io/topics/protocol): the redis client-server communication protocol
-- [Statistically Rigorous Java Performance Evaluation](Statistically Rigorous Java Performance Evaluation): a good example of the kind of thinking necessary to create effective benchmarks
+- [Statistically Rigorous Java Performance Evaluation](https://dri.es/files/oopsla07-georges.pdf): a good example of the kind of thinking necessary to create effective benchmarks
 
