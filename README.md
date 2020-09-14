@@ -67,6 +67,8 @@ The benchmark result is showed below.
  
 For example, when set, get and remove 2^16 k/v pairs, `kvs` uses 350ms and 4.05MB while `sled` uses 2176ms and 7.45MB.
 
+![full_density_avg](https://raw.githubusercontent.com/TangliziGit/kvs/master/doc/full_density_avg.png)
+
 ## Reference
 
 - [Write a Good CLI Program](https://qiita.com/tigercosmos/items/678f39b1209e60843cc3)
