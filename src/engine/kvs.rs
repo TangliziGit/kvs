@@ -197,10 +197,9 @@ impl KvStoreReader {
     where F: FnOnce(&mut BufReader<File>) -> Result<R> + Send {
         let mut readers = self.readers.borrow_mut();
 
-        if readers.contains_key(gen) {
+        if !readers.contains_key(gen) {
             let path = db_path(&self.path, *gen);
             let reader = BufReader::new(File::open(path)?);
-
             readers.insert(*gen, reader);
         }
 
@@ -218,16 +217,13 @@ impl KvStoreReader {
 
     fn read_command(&self, offset: &CommandOffset) -> Result<Command> {
         let CommandOffset { gen, pos, len } = offset;
-        // TODO: get the reader when the reader is not in readers.
-        let mut readers = self.readers.borrow_mut();
-        let reader = readers
-            .get_mut(&gen)
-            .expect("Can not find the Error reader");
-        reader.seek(SeekFrom::Start(*pos))?;
+        self.read(gen, |reader| {
+            reader.seek(SeekFrom::Start(*pos))?;
 
-        let mut buffer = vec![0u8; *len as usize];
-        reader.read_exact(&mut buffer)?;
-        Ok(serde_json::from_slice(&buffer)?)
+            let mut buffer = vec![0u8; *len as usize];
+            reader.read_exact(&mut buffer)?;
+            Ok(serde_json::from_slice(&buffer)?)
+        })
     }
 }
 

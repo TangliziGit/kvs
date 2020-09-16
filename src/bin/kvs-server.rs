@@ -7,6 +7,7 @@ use std::env::current_dir;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
+use kvs::thread_pool::{NaiveThreadPool, ThreadPool};
 
 fn main() -> Result<()> {
     let logger = get_logger();
@@ -93,8 +94,9 @@ fn run(addr: &str, engine: &str, logger: Logger) -> Result<()> {
 }
 
 fn run_with_engine(engine: impl KvsEngine, addr: &str, logger: Logger) -> Result<()> {
-    let mut server = KvsServer::new(engine);
-    server.run(addr, &logger)
+    let thread_pool = NaiveThreadPool::new(4)?;
+    let mut server = KvsServer::new(engine, thread_pool);
+    server.run(addr, logger)
 }
 
 fn current_engine(path: &PathBuf) -> Result<Option<String>> {

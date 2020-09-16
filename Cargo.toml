@@ -1,6 +1,6 @@
 [package]
 name = "kvs"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["TangliziGit <tanglizimail@foxmail.com>"]
 description = "A key-value store"
 edition = "2018"
