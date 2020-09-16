@@ -12,3 +12,6 @@ mod engine;
 mod error;
 mod protocol;
 mod server;
+
+/// The thread_pool modular.
+pub mod thread_pool;

@@ -4,3 +4,4 @@ Cargo.lock
 
 kvs.db/
 sled.db/
+engine

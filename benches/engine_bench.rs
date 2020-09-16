@@ -4,7 +4,7 @@ use rand::Rng;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
-const SCALE: [u32; 7] = [4, 6, 8, 10, 12, 14, 16];
+const SCALE: [u32; 11] = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 
 fn dir_size(dir: &TempDir) -> u64 {
     let entries = WalkDir::new(dir.path()).into_iter();
