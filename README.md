@@ -53,9 +53,14 @@ SUBCOMMANDS:
 ## Feature
 
 1. friendly CLI 
-2. error handling 
-3. log-structured key/value store
-4. simple, readable Protocol between a server and clients: TODO
+2. error handling with `Result`
+3. log-structured k/v store  
+    logging with compaction
+4. simple & readable protocol  
+    like redis `RESP`
+5. shared store engine for multi-threads  
+    unique shared writer and cloneable reader, based on reference counting and locks.
+    next step is to use wait-free data structures.
 
 ## Benchmark
 
@@ -79,4 +84,6 @@ For example, when set, get and remove 2^16 k/v pairs, `kvs` uses 350ms and 4.05M
 - [Bitcask: A Log-Structured Hash Table for Fast Key/Value Data](https://github.com/basho/bitcask/blob/develop/doc/bitcask-intro.pdf)
 - [Redis Protocol specification](https://redis.io/topics/protocol): the redis client-server communication protocol
 - [Statistically Rigorous Java Performance Evaluation](https://dri.es/files/oopsla07-georges.pdf): a good example of the kind of thinking necessary to create effective benchmarks
-
+- [Rust: A unique perspective](https://limpet.net/mbrubeck/2019/02/07/rust-a-unique-perspective.html)
+- [Lock-free vs. wait-free concurrency](https://rethinkdb.com/blog/lock-free-vs-wait-free-concurrency/)
+- [Lock-Free and Wait-Free, definition and examples ](http://concurrencyfreaks.blogspot.com/2013/05/lock-free-and-wait-free-definition-and.html) [[Chinese](http://ifeve.com/lock-free-and-wait-free/)]
